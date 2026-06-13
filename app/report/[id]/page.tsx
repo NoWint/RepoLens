@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { Sidebar } from "@/components/report/sidebar";
 import { Overview } from "@/components/report/overview";
 import { FileTree } from "@/components/report/file-tree";
@@ -12,24 +13,29 @@ import { HealthScoreView } from "@/components/report/health-score";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { AnalysisReport } from "@/lib/types";
 
+function getCachedReport(id: string): AnalysisReport | null {
+  if (typeof window === "undefined") return null;
+  const cached = sessionStorage.getItem(`report-${id}`);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch {
+      // Invalid cache
+    }
+  }
+  return null;
+}
+
 export default function ReportPage() {
   const params = useParams();
   const id = decodeURIComponent(params.id as string);
-  const [report, setReport] = useState<AnalysisReport | null>(null);
+  const [report, setReport] = useState<AnalysisReport | null>(() => getCachedReport(id));
   const [activeSection, setActiveSection] = useState("overview");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Try to get from sessionStorage first
-    const cached = sessionStorage.getItem(`report-${id}`);
-    if (cached) {
-      try {
-        setReport(JSON.parse(cached));
-        return;
-      } catch {
-        // Invalid cache
-      }
-    }
+    // If already loaded from cache, skip fetch
+    if (report) return;
 
     // If not in cache, re-fetch
     const [owner, repoAndBranch] = id.split("/");
@@ -50,16 +56,16 @@ export default function ReportPage() {
         }
       })
       .catch((err) => setError(err.message));
-  }, [id]);
+  }, [id, report]);
 
   if (error) {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-red-500">{error}</p>
-          <a href="/" className="text-primary underline">
+          <Link href="/" className="text-primary underline">
             Try again
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -96,7 +102,7 @@ export default function ReportPage() {
     <div className="min-h-screen flex flex-col">
       <header className="border-b px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <a href="/" className="font-bold text-lg">RepoLens</a>
+          <Link href="/" className="font-bold text-lg">RepoLens</Link>
           <span className="text-muted-foreground">|</span>
           <span className="text-sm">{report.meta.fullName}</span>
         </div>

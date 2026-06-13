@@ -1,5 +1,5 @@
 import { AnalysisReport, TechStack, LanguageInfo, FrameworkInfo, DirectoryPattern } from "./types";
-import { createGitHubService, GitHubService } from "./github";
+import { createGitHubService } from "./github";
 import { cloneRepo, scanDirectory, identifyDirectoryPatterns, extractConfigFiles, countFiles, cleanupClone, ScanResult } from "./scanner";
 import { parseRepository, parseEntryFiles } from "./parser";
 import { generateBaseSummary } from "./summary/templates";

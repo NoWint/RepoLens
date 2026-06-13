@@ -78,7 +78,7 @@ export function generateArchitecture(
 export function generateTechnicalAnalysis(
   meta: RepoMeta,
   techStack: TechStack,
-  configFiles: Record<string, string>
+  _configFiles: Record<string, string>
 ): string {
   let analysis = "";
 
