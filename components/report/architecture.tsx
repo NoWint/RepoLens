@@ -19,7 +19,7 @@ export function Architecture({ diagrams }: ArchitectureProps) {
       mermaid.initialize({
         startOnLoad: false,
         theme: "neutral",
-        securityLevel: "loose",
+        securityLevel: "strict",
       });
 
       const code = activeTab === "dependency"

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { UrlInput } from "@/components/shared/url-input";
 import { TokenInput } from "@/components/shared/token-input";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { AnalysisReport } from "@/lib/types";
 
 export default function Home() {
@@ -85,7 +86,10 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-8 p-8">
+    <main className="min-h-screen flex flex-col items-center justify-center gap-8 p-8 relative">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="text-center space-y-2">
         <h1 className="text-5xl font-bold tracking-tight">RepoLens</h1>
         <p className="text-muted-foreground text-lg">

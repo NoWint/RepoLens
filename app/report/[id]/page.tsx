@@ -11,6 +11,7 @@ import { AISummaryView } from "@/components/report/ai-summary";
 import { Architecture } from "@/components/report/architecture";
 import { HealthScoreView } from "@/components/report/health-score";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { AnalysisReport } from "@/lib/types";
 
 function getCachedReport(id: string): AnalysisReport | null {
@@ -140,6 +141,7 @@ export default function ReportPage() {
           <span className="text-sm">{report.meta.fullName}</span>
         </div>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <button
             onClick={() => {
               sessionStorage.removeItem(`report-${id}`);
@@ -154,7 +156,7 @@ export default function ReportPage() {
 
       <div className="flex flex-1">
         <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
-        <main className="flex-1 p-6 overflow-y-auto max-h-[calc(100vh-53px)]">
+        <main className="flex-1 p-6 pb-20 md:pb-6 overflow-y-auto max-h-[calc(100vh-53px)]">
           {renderSection()}
         </main>
       </div>
