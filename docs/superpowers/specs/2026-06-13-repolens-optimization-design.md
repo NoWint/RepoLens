@@ -126,7 +126,7 @@ Phase 4: ReportPhase
 - 移除 `hasWiki` 硬编码
 - 移除 `Issue/PR ratio` 和 `PR merge time` 固定分数
 - 调整 `maxPoints`：文档质量 85（移除 Wiki 15分）、Issue 活跃度 85（移除 ratio 15分）、维护情况 85（移除 PR merge 15分）
-- 总分按比例归一化到 0-100
+- 归一化方式：`normalizedScore = Math.round(rawScore / maxPoints * 100)`，确保每个维度仍映射到 0-100
 
 ### 3.4 私有属性访问
 
