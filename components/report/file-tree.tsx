@@ -1,24 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import { FileTreeNode } from "@/lib/types";
-import { ChevronRight, ChevronDown, File, Folder } from "lucide-react";
+import { ChevronRight, ChevronDown, File, Folder, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FileTreeProps {
   tree: FileTreeNode;
 }
 
-export function FileTree({ tree }: FileTreeProps) {
+export const FileTree = memo(function FileTree({ tree }: FileTreeProps) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 animate-fade-in">
       <h2 className="text-xl font-bold mb-4">File Structure</h2>
-      <div className="font-mono text-sm">
-        <TreeNode node={tree} depth={0} />
+      <div className="font-mono text-sm border rounded-xl bg-card overflow-hidden">
+        <div className="p-3">
+          <TreeNode node={tree} depth={0} />
+        </div>
       </div>
     </div>
   );
-}
+});
 
 function TreeNode({ node, depth }: { node: FileTreeNode; depth: number }) {
   const [expanded, setExpanded] = useState(depth < 2);
@@ -30,14 +32,14 @@ function TreeNode({ node, depth }: { node: FileTreeNode; depth: number }) {
         <button
           onClick={() => setExpanded(!expanded)}
           className={cn(
-            "flex items-center gap-1 py-0.5 px-1 rounded hover:bg-muted w-full text-left",
+            "flex items-center gap-1.5 py-1 px-1.5 rounded-md hover:bg-muted/50 w-full text-left transition-colors",
             depth === 0 && "font-semibold"
           )}
-          style={{ paddingLeft: `${depth * 16 + 4}px` }}
+          style={{ paddingLeft: `${depth * 16 + 6}px` }}
         >
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <Folder size={14} className="text-blue-500 shrink-0" />
-          <span>{node.name}</span>
+          {expanded ? <ChevronDown size={13} className="shrink-0 text-muted-foreground" /> : <ChevronRight size={13} className="shrink-0 text-muted-foreground" />}
+          {expanded ? <FolderOpen size={14} className="text-blue-500 shrink-0" /> : <Folder size={14} className="text-blue-500 shrink-0" />}
+          <span className="truncate">{node.name}</span>
         </button>
         {expanded && node.children?.map((child) => (
           <TreeNode key={child.path} node={child} depth={depth + 1} />
@@ -48,13 +50,13 @@ function TreeNode({ node, depth }: { node: FileTreeNode; depth: number }) {
 
   return (
     <div
-      className="flex items-center gap-1 py-0.5 px-1"
-      style={{ paddingLeft: `${depth * 16 + 20}px` }}
+      className="flex items-center gap-1.5 py-0.5 px-1.5"
+      style={{ paddingLeft: `${depth * 16 + 22}px` }}
     >
-      <File size={14} className="text-muted-foreground shrink-0" />
-      <span className="text-muted-foreground">{node.name}</span>
-      {node.size && (
-        <span className="text-xs text-muted-foreground ml-auto">
+      <File size={13} className="text-muted-foreground shrink-0" />
+      <span className="text-muted-foreground truncate">{node.name}</span>
+      {node.size != null && node.size > 0 && (
+        <span className="text-[11px] text-muted-foreground/60 ml-auto shrink-0">
           {formatSize(node.size)}
         </span>
       )}

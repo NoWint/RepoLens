@@ -1,34 +1,43 @@
 import { AISummary } from "@/lib/types";
+import { memo } from "react";
 
 interface AISummaryProps {
   summary: AISummary;
 }
 
-export function AISummaryView({ summary }: AISummaryProps) {
+export const AISummaryView = memo(function AISummaryView({ summary }: AISummaryProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <h2 className="text-xl font-bold">AI Summary</h2>
 
-      <div>
-        <h3 className="text-lg font-semibold mb-2">Project Introduction</h3>
-        <p className="text-muted-foreground leading-relaxed">
-          {summary.introduction}
-        </p>
-      </div>
+      <div className="space-y-5">
+        <section className="p-5 border rounded-xl bg-card">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Project Introduction
+          </h3>
+          <p className="leading-relaxed">
+            {summary.introduction}
+          </p>
+        </section>
 
-      <div>
-        <h3 className="text-lg font-semibold mb-2">Architecture</h3>
-        <div className="text-muted-foreground leading-relaxed whitespace-pre-line">
-          {summary.architecture}
-        </div>
-      </div>
+        <section className="p-5 border rounded-xl bg-card">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Architecture
+          </h3>
+          <div className="leading-relaxed whitespace-pre-line">
+            {summary.architecture}
+          </div>
+        </section>
 
-      <div>
-        <h3 className="text-lg font-semibold mb-2">Technical Analysis</h3>
-        <div className="text-muted-foreground leading-relaxed whitespace-pre-line">
-          {summary.technicalAnalysis}
-        </div>
+        <section className="p-5 border rounded-xl bg-card">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Technical Analysis
+          </h3>
+          <div className="leading-relaxed whitespace-pre-line">
+            {summary.technicalAnalysis}
+          </div>
+        </section>
       </div>
     </div>
   );
-}
+});

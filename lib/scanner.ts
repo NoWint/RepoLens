@@ -9,10 +9,6 @@ export interface ScanResult {
   totalSize: number;
 }
 
-export function buildFileTreeFromGitHub(tree: FileTreeNode): FileTreeNode {
-  return tree;
-}
-
 export function identifyDirectoryPatterns(tree: FileTreeNode): DirectoryPattern[] {
   const patterns: DirectoryPattern[] = [];
 

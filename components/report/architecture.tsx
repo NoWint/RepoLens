@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { Diagrams } from "@/lib/types";
+import { useTheme } from "next-themes";
 
 interface ArchitectureProps {
   diagrams: Diagrams;
@@ -10,6 +11,9 @@ interface ArchitectureProps {
 export function Architecture({ diagrams }: ArchitectureProps) {
   const [activeTab, setActiveTab] = useState<"dependency" | "directory">("dependency");
   const containerRef = useRef<HTMLDivElement>(null);
+  const { resolvedTheme } = useTheme();
+
+  const mermaidTheme = useMemo(() => resolvedTheme === "dark" ? "dark" : "default", [resolvedTheme]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -18,7 +22,7 @@ export function Architecture({ diagrams }: ArchitectureProps) {
       const mermaid = (await import("mermaid")).default;
       mermaid.initialize({
         startOnLoad: false,
-        theme: "neutral",
+        theme: mermaidTheme,
         securityLevel: "strict",
       });
 
@@ -36,34 +40,34 @@ export function Architecture({ diagrams }: ArchitectureProps) {
         );
         container.innerHTML = svg;
       } catch {
-        container.innerHTML = `<p class="text-muted-foreground text-sm">Failed to render diagram</p><pre class="text-xs mt-2 p-2 bg-muted rounded">${code}</pre>`;
+        container.innerHTML = `<p class="text-muted-foreground text-sm p-4">Failed to render diagram</p><pre class="text-xs mt-2 p-3 bg-muted rounded-lg overflow-auto">${code}</pre>`;
       }
     };
 
     renderDiagram();
-  }, [activeTab, diagrams]);
+  }, [activeTab, diagrams, mermaidTheme]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in">
       <h2 className="text-xl font-bold">Architecture Diagrams</h2>
 
-      <div className="flex gap-2">
+      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
         <button
           onClick={() => setActiveTab("dependency")}
-          className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+          className={`px-3.5 py-1.5 text-sm rounded-md transition-all ${
             activeTab === "dependency"
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground hover:text-foreground"
+              ? "bg-background text-foreground shadow-sm font-medium"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Dependency Graph
         </button>
         <button
           onClick={() => setActiveTab("directory")}
-          className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+          className={`px-3.5 py-1.5 text-sm rounded-md transition-all ${
             activeTab === "directory"
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground hover:text-foreground"
+              ? "bg-background text-foreground shadow-sm font-medium"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Directory Structure
@@ -72,7 +76,7 @@ export function Architecture({ diagrams }: ArchitectureProps) {
 
       <div
         ref={containerRef}
-        className="border rounded-lg p-4 overflow-auto bg-white min-h-[300px]"
+        className="mermaid-container border rounded-xl p-4 overflow-auto bg-card min-h-[300px]"
       />
     </div>
   );

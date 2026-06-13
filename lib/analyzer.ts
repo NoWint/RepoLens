@@ -1,11 +1,11 @@
-import { AnalysisReport, TechStack, LanguageInfo, FrameworkInfo, PipelineProgress } from "./types";
+import { AnalysisReport, TechStack, LanguageInfo, FrameworkInfo } from "./types";
 import { getLanguageColor } from "./colors";
 import { createLogger } from "./logger";
-import { executePipeline } from "./pipeline";
+import { executePipeline, ProgressCallback } from "./pipeline";
 
 const logger = createLogger("analyzer");
 
-export type ProgressCallback = (progress: PipelineProgress) => void;
+export type { ProgressCallback };
 
 export function identifyTechStack(
   configFiles: Record<string, string | null>,

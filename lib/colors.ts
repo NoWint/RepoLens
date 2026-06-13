@@ -21,3 +21,47 @@ const LANGUAGE_COLORS: Record<string, string> = {
 export function getLanguageColor(lang: string): string {
   return LANGUAGE_COLORS[lang] || "#8b8b8b";
 }
+
+export type ScoreLevel = "healthy" | "moderate" | "at-risk";
+
+export function getScoreLevel(score: number): ScoreLevel {
+  if (score >= 71) return "healthy";
+  if (score >= 41) return "moderate";
+  return "at-risk";
+}
+
+export function getScoreColor(score: number): string {
+  const level = getScoreLevel(score);
+  switch (level) {
+    case "healthy": return "text-emerald-500";
+    case "moderate": return "text-amber-500";
+    case "at-risk": return "text-red-500";
+  }
+}
+
+export function getScoreBg(score: number): string {
+  const level = getScoreLevel(score);
+  switch (level) {
+    case "healthy": return "bg-emerald-500";
+    case "moderate": return "bg-amber-500";
+    case "at-risk": return "bg-red-500";
+  }
+}
+
+export function getScoreStroke(score: number): string {
+  const level = getScoreLevel(score);
+  switch (level) {
+    case "healthy": return "stroke-emerald-500";
+    case "moderate": return "stroke-amber-500";
+    case "at-risk": return "stroke-red-500";
+  }
+}
+
+export function getScoreLabel(score: number): string {
+  const level = getScoreLevel(score);
+  switch (level) {
+    case "healthy": return "Healthy";
+    case "moderate": return "Moderate";
+    case "at-risk": return "At Risk";
+  }
+}

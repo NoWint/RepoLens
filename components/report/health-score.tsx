@@ -1,10 +1,12 @@
 import { HealthScore as HealthScoreType } from "@/lib/types";
+import { getScoreColor, getScoreBg, getScoreStroke, getScoreLabel } from "@/lib/colors";
+import { memo } from "react";
 
 interface HealthScoreProps {
   health: HealthScoreType;
 }
 
-export function HealthScoreView({ health }: HealthScoreProps) {
+export const HealthScoreView = memo(function HealthScoreView({ health }: HealthScoreProps) {
   const dimensions = [
     { key: "documentation", label: "Documentation Quality", data: health.documentation },
     { key: "issueActivity", label: "Issue Activity", data: health.issueActivity },
@@ -12,32 +14,32 @@ export function HealthScoreView({ health }: HealthScoreProps) {
   ] as const;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <h2 className="text-xl font-bold">Health Score</h2>
 
-      <div className="flex items-center gap-6 p-4 border rounded-lg">
-        <div className="relative h-28 w-28">
+      <div className="flex items-center gap-6 p-6 border rounded-xl bg-card">
+        <div className="relative h-28 w-28 shrink-0">
           <svg className="h-28 w-28 -rotate-90" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="6" className="text-muted" />
+            <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="5" className="text-muted/30" />
             <circle
               cx="50" cy="50" r="40"
               fill="none"
               stroke="currentColor"
-              strokeWidth="6"
+              strokeWidth="5"
               strokeDasharray={`${health.overall * 2.51} 251`}
               strokeLinecap="round"
-              className={getScoreColor(health.overall)}
+              className={`${getScoreStroke(health.overall)} animate-score-fill`}
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className={`text-3xl font-bold ${getScoreColor(health.overall)}`}>
+            <span className={`text-3xl font-bold tabular-nums ${getScoreColor(health.overall)}`}>
               {health.overall}
             </span>
           </div>
         </div>
         <div>
           <h3 className="text-lg font-semibold">Overall Health</h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mt-1">
             {health.overall >= 71
               ? "This project is in good health with active maintenance and good documentation."
               : health.overall >= 41
@@ -49,26 +51,31 @@ export function HealthScoreView({ health }: HealthScoreProps) {
 
       <div className="grid gap-4">
         {dimensions.map(({ key, label, data }) => (
-          <div key={key} className="border rounded-lg p-4 space-y-3">
+          <div key={key} className="border rounded-xl p-5 space-y-3 bg-card">
             <div className="flex items-center justify-between">
               <h4 className="font-medium">{label}</h4>
-              <span className={`text-lg font-bold ${getScoreColor(data.score)}`}>
-                {data.score}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-lg font-bold tabular-nums ${getScoreColor(data.score)}`}>
+                  {data.score}
+                </span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${getScoreBg(data.score)}/10 ${getScoreColor(data.score)}`}>
+                  {getScoreLabel(data.score)}
+                </span>
+              </div>
             </div>
 
             <div className="h-2 bg-muted rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all ${getScoreBg(data.score)}`}
+                className={`h-full rounded-full transition-all duration-700 ${getScoreBg(data.score)}`}
                 style={{ width: `${data.score}%` }}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm pt-1">
               {data.details.map((detail, i) => (
                 <div key={i} className="flex justify-between">
                   <span className="text-muted-foreground">{detail.metric}</span>
-                  <span>
+                  <span className="font-medium tabular-nums">
                     {typeof detail.value === "boolean"
                       ? detail.value ? "Yes" : "No"
                       : String(detail.value)}
@@ -81,16 +88,4 @@ export function HealthScoreView({ health }: HealthScoreProps) {
       </div>
     </div>
   );
-}
-
-function getScoreColor(score: number): string {
-  if (score >= 71) return "text-green-500";
-  if (score >= 41) return "text-yellow-500";
-  return "text-red-500";
-}
-
-function getScoreBg(score: number): string {
-  if (score >= 71) return "bg-green-500";
-  if (score >= 41) return "bg-yellow-500";
-  return "bg-red-500";
-}
+});

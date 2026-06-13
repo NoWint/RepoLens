@@ -8,38 +8,28 @@ import { generateDiagrams } from "./diagram";
 import { calculateHealthScore } from "./health";
 import { identifyTechStack } from "./analyzer";
 import { ANALYSIS_CONFIG } from "./config";
+import { toAnalysisError } from "./errors";
 
 export type ProgressCallback = (progress: PipelineProgress) => void;
 
-// Phase result types
-interface MetadataPhaseResult {
+export interface PipelineResult {
   meta: RepoMeta;
   readmeContent: string | null;
   languageBytes: Record<string, number>;
-}
-
-interface StructurePhaseResult {
   fileTree: FileTreeNode;
   directoryPatterns: DirectoryPattern[];
   configFileContents: Record<string, string | null>;
-}
-
-interface AnalysisPhaseResult {
   techStack: TechStack;
   depMap: DependencyMap;
-}
-
-interface ReportPhaseResult {
   summary: AISummary;
   diagrams: Diagrams;
   health: HealthScore;
 }
 
-// Phase 1: Fetch repository metadata
 async function metadataPhase(
   github: GitHubService,
   onProgress?: ProgressCallback
-): Promise<MetadataPhaseResult> {
+): Promise<{ meta: RepoMeta; readmeContent: string | null; languageBytes: Record<string, number> }> {
   onProgress?.({ phase: "metadata", message: ANALYSIS_CONFIG.progressLabels.metadata });
 
   const [meta, readmeContent, languageBytes] = await Promise.all([
@@ -51,11 +41,10 @@ async function metadataPhase(
   return { meta, readmeContent, languageBytes };
 }
 
-// Phase 2: Scan file structure
 async function structurePhase(
   github: GitHubService,
   onProgress?: ProgressCallback
-): Promise<StructurePhaseResult> {
+): Promise<{ fileTree: FileTreeNode; directoryPatterns: DirectoryPattern[]; configFileContents: Record<string, string | null> }> {
   onProgress?.({ phase: "structure", message: ANALYSIS_CONFIG.progressLabels.structure });
 
   const fileTree = await github.getFileTree();
@@ -66,14 +55,13 @@ async function structurePhase(
   return { fileTree, directoryPatterns, configFileContents };
 }
 
-// Phase 3: Analyze tech stack and dependencies
 async function analysisPhase(
   github: GitHubService,
   fileTree: FileTreeNode,
   configFileContents: Record<string, string | null>,
   languageBytes: Record<string, number>,
   onProgress?: ProgressCallback
-): Promise<AnalysisPhaseResult> {
+): Promise<{ techStack: TechStack; depMap: DependencyMap }> {
   onProgress?.({ phase: "analysis", message: ANALYSIS_CONFIG.progressLabels.analysis });
 
   const parseablePaths = collectParseableFilePaths(fileTree).slice(0, ANALYSIS_CONFIG.maxFilesToParse);
@@ -91,7 +79,6 @@ async function analysisPhase(
   return { techStack, depMap };
 }
 
-// Phase 4: Generate report artifacts
 async function reportPhase(
   meta: RepoMeta,
   fileTree: FileTreeNode,
@@ -102,7 +89,7 @@ async function reportPhase(
   github: GitHubService,
   readmeContent: string | null,
   onProgress?: ProgressCallback
-): Promise<ReportPhaseResult> {
+): Promise<{ summary: AISummary; diagrams: Diagrams; health: HealthScore }> {
   onProgress?.({ phase: "report", message: ANALYSIS_CONFIG.progressLabels.report });
 
   const baseSummary = generateBaseSummary(
@@ -123,58 +110,42 @@ async function reportPhase(
   return { summary, diagrams, health };
 }
 
-// Main pipeline executor
 export async function executePipeline(
   url: string,
   token?: string,
   onProgress?: ProgressCallback
-): Promise<{
-  meta: RepoMeta;
-  readmeContent: string | null;
-  languageBytes: Record<string, number>;
-  fileTree: FileTreeNode;
-  directoryPatterns: DirectoryPattern[];
-  configFileContents: Record<string, string | null>;
-  techStack: TechStack;
-  depMap: DependencyMap;
-  summary: AISummary;
-  diagrams: Diagrams;
-  health: HealthScore;
-}> {
-  const github = GitHubService.fromUrl(url, token);
+): Promise<PipelineResult> {
+  try {
+    const github = GitHubService.fromUrl(url, token);
 
-  // Phase 1: Metadata
-  const metadata = await metadataPhase(github, onProgress);
+    const metadata = await metadataPhase(github, onProgress);
+    const structure = await structurePhase(github, onProgress);
+    const analysis = await analysisPhase(
+      github,
+      structure.fileTree,
+      structure.configFileContents,
+      metadata.languageBytes,
+      onProgress
+    );
+    const report = await reportPhase(
+      metadata.meta,
+      structure.fileTree,
+      structure.directoryPatterns,
+      analysis.depMap,
+      structure.configFileContents,
+      analysis.techStack,
+      github,
+      metadata.readmeContent,
+      onProgress
+    );
 
-  // Phase 2: Structure
-  const structure = await structurePhase(github, onProgress);
-
-  // Phase 3: Analysis
-  const analysis = await analysisPhase(
-    github,
-    structure.fileTree,
-    structure.configFileContents,
-    metadata.languageBytes,
-    onProgress
-  );
-
-  // Phase 4: Report
-  const report = await reportPhase(
-    metadata.meta,
-    structure.fileTree,
-    structure.directoryPatterns,
-    analysis.depMap,
-    structure.configFileContents,
-    analysis.techStack,
-    github,
-    metadata.readmeContent,
-    onProgress
-  );
-
-  return {
-    ...metadata,
-    ...structure,
-    ...analysis,
-    ...report,
-  };
+    return {
+      ...metadata,
+      ...structure,
+      ...analysis,
+      ...report,
+    };
+  } catch (error) {
+    throw toAnalysisError(error);
+  }
 }
