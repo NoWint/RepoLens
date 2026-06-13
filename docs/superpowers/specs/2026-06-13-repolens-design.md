@@ -32,7 +32,7 @@ RepoLens 是 GitHub 仓库深度分析工具。输入仓库地址即可获得包
 │  │  scanner.ts  → 仓库克隆+文件扫描            │  │
 │  │  parser.ts   → Tree-sitter 解析引擎         │  │
 │  │  analyzer.ts → 分析编排器                    │  │
-│  │  summary.ts  → 规则模板+LLM 摘要生成        │  │
+│  │  summary/   → 规则模板+LLM 摘要生成        │  │
 │  │  diagram.ts  → Mermaid 图生成               │  │
 │  │  health.ts   → 健康度评分                    │  │
 │  └────────────────────────────────────────────┘  │
@@ -53,6 +53,7 @@ Next.js API Routes 作为薄编排层，直接调用 GitHub API + 本地 Tree-si
 - **数据流**：用户输入 URL → API Route 获取 GitHub 元数据 → 克隆到 /tmp → Tree-sitter 解析 → 规则模板生成基础摘要 → LLM API 润色 → 返回报告
 - **优点**：架构简单，Vercel 部署友好，开发速度快，MVP 可快速验证
 - **演进路径**：后续迁移到 Vercel Edge Functions 或加异步队列支持大仓库
+- **超时限制**：Vercel Hobby 计划 Serverless Function 超时 10s，Pro 计划 60s；MVP 需确保分析流程在 10s 内完成（通过仓库大小限制和降级策略保证）
 
 ### 关键设计决策
 
@@ -113,7 +114,7 @@ Next.js API Routes 作为薄编排层，直接调用 GitHub API + 本地 Tree-si
 | github.ts | 仓库 URL + 可选 Token | 仓库元数据、文件树、Issues 统计 | Octokit 封装，双模式认证 |
 | scanner.ts | 克隆路径 | 文件结构、目录模式、配置文件 | fs 遍历 + 模式匹配 |
 | parser.ts | 文件路径列表 | 模块依赖映射 | tree-sitter + language grammars |
-| summary.ts | 元数据 + 文件结构 + 依赖映射 | 项目介绍、架构说明、技术分析 | 规则模板拼接 → LLM API 润色 |
+| summary/ | 元数据 + 文件结构 + 依赖映射 | 项目介绍、架构说明、技术分析 | templates.ts 规则模板拼接 → llm.ts LLM API 润色 |
 | diagram.ts | 依赖映射 + 目录结构 | Mermaid 代码 | 规则生成，无 LLM 依赖 |
 | health.ts | Issues/PRs/commits/文档 | 健康度评分 (0-100) | 加权评分算法 |
 
