@@ -46,11 +46,44 @@ export default function ReportPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: `https://github.com/${owner}/${repo}` }),
     })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) {
-          setError(data.error);
+      .then(async (res) => {
+        const contentType = res.headers.get("content-type") || "";
+
+        if (contentType.includes("text/event-stream")) {
+          const reader = res.body?.getReader();
+          const decoder = new TextDecoder();
+          let reportData: AnalysisReport | null = null;
+
+          if (!reader) throw new Error("Failed to read response stream");
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const text = decoder.decode(value, { stream: true });
+            const lines = text.split("\n");
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const data = JSON.parse(line.slice(6));
+
+              if (data.type === "complete") {
+                reportData = data.data;
+              } else if (data.type === "error") {
+                throw new Error(data.error);
+              }
+            }
+          }
+
+          return reportData;
         } else {
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          return data as AnalysisReport;
+        }
+      })
+      .then((data) => {
+        if (data) {
           setReport(data);
           sessionStorage.setItem(`report-${id}`, JSON.stringify(data));
         }

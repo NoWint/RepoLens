@@ -121,3 +121,11 @@ export interface DirectoryPattern {
   path: string;
   purpose: string;
 }
+
+// Pipeline progress
+export type PipelinePhase = "metadata" | "structure" | "analysis" | "report";
+
+export interface PipelineProgress {
+  phase: PipelinePhase;
+  message: string;
+}

@@ -1,5 +1,6 @@
 import { HealthScore, DimensionScore, ScoreDetail } from "./types";
 import { GitHubService } from "./github";
+import { ANALYSIS_CONFIG } from "./config";
 
 export async function calculateHealthScore(
   github: GitHubService,
@@ -11,13 +12,18 @@ export async function calculateHealthScore(
     calculateMaintenance(github),
   ]);
 
+  const { documentation: wDoc, issueActivity: wIssue, maintenance: wMaint } = ANALYSIS_CONFIG.healthWeights;
   const overall = Math.round(
-    documentation.score * 0.3 +
-    issueActivity.score * 0.35 +
-    maintenance.score * 0.35
+    documentation.score * wDoc +
+    issueActivity.score * wIssue +
+    maintenance.score * wMaint
   );
 
   return { overall, documentation, issueActivity, maintenance };
+}
+
+function normalizeScore(rawScore: number, maxPoints: number): number {
+  return Math.round((rawScore / maxPoints) * 100);
 }
 
 async function calculateDocumentation(
@@ -25,38 +31,46 @@ async function calculateDocumentation(
   readmeContent: string | null
 ): Promise<DimensionScore> {
   const details: ScoreDetail[] = [];
-  let score = 0;
+  let rawScore = 0;
+  let maxPoints = 0;
 
+  // README length
   const readmeLength = readmeContent?.length || 0;
-  const readmePoints = readmeLength > 500 ? 30 : Math.min(30, Math.floor(readmeLength / 17));
-  details.push({ metric: "README length", value: readmeLength, points: readmePoints, maxPoints: 30 });
-  score += readmePoints;
+  const readmeMaxPoints = 30;
+  maxPoints += readmeMaxPoints;
+  const readmePoints = readmeLength > ANALYSIS_CONFIG.healthThresholds.readmeLength
+    ? readmeMaxPoints
+    : Math.min(readmeMaxPoints, Math.floor(readmeLength / (ANALYSIS_CONFIG.healthThresholds.readmeLength / readmeMaxPoints)));
+  details.push({ metric: "README length", value: readmeLength, points: readmePoints, maxPoints: readmeMaxPoints });
+  rawScore += readmePoints;
 
+  // Has installation docs
   const hasInstall = readmeContent
     ? /install|setup|getting started|quickstart|usage/i.test(readmeContent)
     : false;
-  const installPoints = hasInstall ? 20 : 0;
-  details.push({ metric: "Has installation docs", value: hasInstall, points: installPoints, maxPoints: 20 });
-  score += installPoints;
+  const installMaxPoints = 25;
+  maxPoints += installMaxPoints;
+  const installPoints = hasInstall ? installMaxPoints : 0;
+  details.push({ metric: "Has installation docs", value: hasInstall, points: installPoints, maxPoints: installMaxPoints });
+  rawScore += installPoints;
 
-  const hasContributing = await github.checkFileExists("CONTRIBUTING.md");
-  const contributingPoints = hasContributing ? 20 : 0;
-  details.push({ metric: "CONTRIBUTING.md exists", value: hasContributing, points: contributingPoints, maxPoints: 20 });
-  score += contributingPoints;
+  // CONTRIBUTING.md + CHANGELOG.md (parallel check)
+  const fileExists = await github.checkMultipleFilesExist(["CONTRIBUTING.md", "CHANGELOG.md", "CHANGELOG"]);
+  const contributingMaxPoints = 20;
+  const changelogMaxPoints = 10;
+  maxPoints += contributingMaxPoints + changelogMaxPoints;
 
-  const hasChangelog = await github.checkFileExists("CHANGELOG.md") || await github.checkFileExists("CHANGELOG");
-  const changelogPoints = hasChangelog ? 15 : 0;
-  details.push({ metric: "CHANGELOG exists", value: hasChangelog, points: changelogPoints, maxPoints: 15 });
-  score += changelogPoints;
+  const contributingPoints = fileExists["CONTRIBUTING.md"] ? contributingMaxPoints : 0;
+  details.push({ metric: "CONTRIBUTING.md exists", value: fileExists["CONTRIBUTING.md"], points: contributingPoints, maxPoints: contributingMaxPoints });
+  rawScore += contributingPoints;
 
-  const hasWiki = false;
-  const wikiPoints = hasWiki ? 15 : 0;
-  details.push({ metric: "Wiki has content", value: hasWiki, points: wikiPoints, maxPoints: 15 });
-  score += wikiPoints;
+  const changelogPoints = (fileExists["CHANGELOG.md"] || fileExists["CHANGELOG"]) ? changelogMaxPoints : 0;
+  details.push({ metric: "CHANGELOG exists", value: fileExists["CHANGELOG.md"] || fileExists["CHANGELOG"], points: changelogPoints, maxPoints: changelogMaxPoints });
+  rawScore += changelogMaxPoints;
 
   return {
-    score,
-    label: scoreToLabel(score),
+    score: normalizeScore(rawScore, maxPoints),
+    label: scoreToLabel(normalizeScore(rawScore, maxPoints)),
     details,
   };
 }
@@ -65,36 +79,49 @@ async function calculateIssueActivity(
   github: GitHubService
 ): Promise<DimensionScore> {
   const details: ScoreDetail[] = [];
-  let score = 0;
+  let rawScore = 0;
+  let maxPoints = 0;
 
   const stats = await github.getIssuesStats();
 
-  const lowIssuesPoints = stats.openCount < 50 ? 25 : Math.max(0, 25 - Math.floor((stats.openCount - 50) / 10));
-  details.push({ metric: "Open issues count", value: stats.openCount, points: lowIssuesPoints, maxPoints: 25 });
-  score += lowIssuesPoints;
+  // Open issues count
+  const openIssuesMaxPoints = 30;
+  maxPoints += openIssuesMaxPoints;
+  const lowIssuesPoints = stats.openCount < ANALYSIS_CONFIG.healthThresholds.openIssuesLow
+    ? openIssuesMaxPoints
+    : Math.max(0, openIssuesMaxPoints - Math.floor((stats.openCount - ANALYSIS_CONFIG.healthThresholds.openIssuesLow) / 10) * 5);
+  details.push({ metric: "Open issues count", value: stats.openCount, points: lowIssuesPoints, maxPoints: openIssuesMaxPoints });
+  rawScore += lowIssuesPoints;
 
+  // Average close time
+  const closeTimeMaxPoints = 30;
+  maxPoints += closeTimeMaxPoints;
   const avgCloseDays = stats.avgCloseDays;
   const closeTimePoints = avgCloseDays !== null
-    ? (avgCloseDays < 7 ? 25 : Math.max(0, 25 - Math.floor((avgCloseDays - 7) / 3)))
+    ? (avgCloseDays < ANALYSIS_CONFIG.healthThresholds.avgCloseDaysGood
+      ? closeTimeMaxPoints
+      : Math.max(0, closeTimeMaxPoints - Math.floor((avgCloseDays - ANALYSIS_CONFIG.healthThresholds.avgCloseDaysGood) / 3) * 5))
     : 0;
-  details.push({ metric: "Avg issue close time (days)", value: avgCloseDays ?? "N/A", points: closeTimePoints, maxPoints: 25 });
-  score += closeTimePoints;
+  details.push({ metric: "Avg issue close time (days)", value: avgCloseDays ?? "N/A", points: closeTimePoints, maxPoints: closeTimeMaxPoints });
+  rawScore += closeTimePoints;
 
-  const labelPoints = stats.hasLabels ? 20 : 0;
-  details.push({ metric: "Issues use labels", value: stats.hasLabels, points: labelPoints, maxPoints: 20 });
-  score += labelPoints;
+  // Issues use labels
+  const labelMaxPoints = 20;
+  maxPoints += labelMaxPoints;
+  const labelPoints = stats.hasLabels ? labelMaxPoints : 0;
+  details.push({ metric: "Issues use labels", value: stats.hasLabels, points: labelPoints, maxPoints: labelMaxPoints });
+  rawScore += labelPoints;
 
-  const recentPoints = stats.recentlyClosed ? 15 : 0;
-  details.push({ metric: "Issues closed in last 30 days", value: stats.recentlyClosed, points: recentPoints, maxPoints: 15 });
-  score += recentPoints;
-
-  const ratioPoints = 10;
-  details.push({ metric: "Issue/PR ratio", value: "reasonable", points: ratioPoints, maxPoints: 15 });
-  score += ratioPoints;
+  // Recently closed
+  const recentMaxPoints = 20;
+  maxPoints += recentMaxPoints;
+  const recentPoints = stats.recentlyClosed ? recentMaxPoints : 0;
+  details.push({ metric: "Issues closed in last 30 days", value: stats.recentlyClosed, points: recentPoints, maxPoints: recentMaxPoints });
+  rawScore += recentPoints;
 
   return {
-    score,
-    label: scoreToLabel(score),
+    score: normalizeScore(rawScore, maxPoints),
+    label: scoreToLabel(normalizeScore(rawScore, maxPoints)),
     details,
   };
 }
@@ -103,7 +130,8 @@ async function calculateMaintenance(
   github: GitHubService
 ): Promise<DimensionScore> {
   const details: ScoreDetail[] = [];
-  let score = 0;
+  let rawScore = 0;
+  let maxPoints = 0;
 
   const [commits, contributors, latestRelease] = await Promise.all([
     github.getRecentCommits(30),
@@ -111,42 +139,56 @@ async function calculateMaintenance(
     github.getLatestRelease(),
   ]);
 
+  // Recent commit
+  const recentCommitMaxPoints = 25;
+  maxPoints += recentCommitMaxPoints;
   const lastCommitDate = commits[0]?.date;
   const daysSinceLastCommit = lastCommitDate
     ? (Date.now() - new Date(lastCommitDate).getTime()) / (1000 * 60 * 60 * 24)
     : 999;
-  const recentCommitPoints = daysSinceLastCommit < 30 ? 25 : Math.max(0, 25 - Math.floor((daysSinceLastCommit - 30) / 15));
-  details.push({ metric: "Days since last commit", value: Math.round(daysSinceLastCommit), points: recentCommitPoints, maxPoints: 25 });
-  score += recentCommitPoints;
+  const recentCommitPoints = daysSinceLastCommit < ANALYSIS_CONFIG.healthThresholds.recentCommitDays
+    ? recentCommitMaxPoints
+    : Math.max(0, recentCommitMaxPoints - Math.floor((daysSinceLastCommit - ANALYSIS_CONFIG.healthThresholds.recentCommitDays) / 15) * 5);
+  details.push({ metric: "Days since last commit", value: Math.round(daysSinceLastCommit), points: recentCommitPoints, maxPoints: recentCommitMaxPoints });
+  rawScore += recentCommitPoints;
 
+  // Monthly commits
+  const commitFreqMaxPoints = 25;
+  maxPoints += commitFreqMaxPoints;
   const monthlyCommits = commits.filter((c) => {
     const date = new Date(c.date);
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     return date > thirtyDaysAgo;
   }).length;
-  const commitFreqPoints = monthlyCommits > 10 ? 25 : Math.min(25, monthlyCommits * 2.5);
-  details.push({ metric: "Commits in last 30 days", value: monthlyCommits, points: Math.round(commitFreqPoints), maxPoints: 25 });
-  score += Math.round(commitFreqPoints);
+  const commitFreqPoints = monthlyCommits > ANALYSIS_CONFIG.healthThresholds.monthlyCommitsGood
+    ? commitFreqMaxPoints
+    : Math.min(commitFreqMaxPoints, Math.round(monthlyCommits * (commitFreqMaxPoints / ANALYSIS_CONFIG.healthThresholds.monthlyCommitsGood)));
+  details.push({ metric: "Commits in last 30 days", value: monthlyCommits, points: commitFreqPoints, maxPoints: commitFreqMaxPoints });
+  rawScore += commitFreqPoints;
 
-  const contributorPoints = contributors > 5 ? 20 : Math.min(20, contributors * 4);
-  details.push({ metric: "Contributors", value: contributors, points: contributorPoints, maxPoints: 20 });
-  score += contributorPoints;
+  // Contributors
+  const contributorMaxPoints = 25;
+  maxPoints += contributorMaxPoints;
+  const contributorPoints = contributors > ANALYSIS_CONFIG.healthThresholds.contributorsGood
+    ? contributorMaxPoints
+    : Math.min(contributorMaxPoints, Math.round(contributors * (contributorMaxPoints / ANALYSIS_CONFIG.healthThresholds.contributorsGood)));
+  details.push({ metric: "Contributors", value: contributors, points: contributorPoints, maxPoints: contributorMaxPoints });
+  rawScore += contributorPoints;
 
+  // Recent release
+  const releaseMaxPoints = 25;
+  maxPoints += releaseMaxPoints;
   const hasRecentRelease = latestRelease
-    ? (Date.now() - new Date(latestRelease.date).getTime()) / (1000 * 60 * 60 * 24 * 180) < 1
+    ? (Date.now() - new Date(latestRelease.date).getTime()) / (1000 * 60 * 60 * 24 * (ANALYSIS_CONFIG.healthThresholds.releaseMonths * 30)) < 1
     : false;
-  const releasePoints = hasRecentRelease ? 15 : 0;
-  details.push({ metric: "Release in last 6 months", value: hasRecentRelease, points: releasePoints, maxPoints: 15 });
-  score += releasePoints;
-
-  const prMergePoints = 10;
-  details.push({ metric: "PR merge time", value: "reasonable", points: prMergePoints, maxPoints: 15 });
-  score += prMergePoints;
+  const releasePoints = hasRecentRelease ? releaseMaxPoints : 0;
+  details.push({ metric: "Release in last 6 months", value: hasRecentRelease, points: releasePoints, maxPoints: releaseMaxPoints });
+  rawScore += releasePoints;
 
   return {
-    score,
-    label: scoreToLabel(score),
+    score: normalizeScore(rawScore, maxPoints),
+    label: scoreToLabel(normalizeScore(rawScore, maxPoints)),
     details,
   };
 }

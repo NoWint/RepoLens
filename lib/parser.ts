@@ -1,5 +1,4 @@
 import { DependencyMap, ModuleInfo, DependencyEdge } from "./types";
-import fs from "fs";
 import path from "path";
 
 const EXTENSION_TO_LANGUAGE: Record<string, string> = {
@@ -14,58 +13,43 @@ const EXTENSION_TO_LANGUAGE: Record<string, string> = {
 
 const IMPORT_PATTERNS: Record<string, RegExp[]> = {
   javascript: [
-    /import\s+.*?from\s+['"]([^'"]+)['"]/g,
-    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+    /import\s+.*?from\s+['"]([^'"]+)['"]/,
+    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/,
   ],
   typescript: [
-    /import\s+.*?from\s+['"]([^'"]+)['"]/g,
-    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+    /import\s+.*?from\s+['"]([^'"]+)['"]/,
+    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/,
   ],
   python: [
-    /import\s+([a-zA-Z0-9_.]+)/g,
-    /from\s+([a-zA-Z0-9_.]+)\s+import/g,
+    /import\s+([a-zA-Z0-9_.]+)/,
+    /from\s+([a-zA-Z0-9_.]+)\s+import/,
   ],
   go: [
-    /"([^"]+)"/g,
+    /import\s+(?:\([\s\S]*?"([^"]+)"[\s\S]*?\)|\s*"([^"]+)")/,
   ],
   rust: [
-    /use\s+([a-zA-Z0-9_:]+)/g,
+    /use\s+([a-zA-Z0-9_:]+)/,
   ],
 };
-
-const ENTRY_FILES = [
-  "index.ts",
-  "index.tsx",
-  "index.js",
-  "index.jsx",
-  "main.ts",
-  "main.go",
-  "main.py",
-  "main.rs",
-  "app.ts",
-  "app.tsx",
-  "mod.rs",
-  "__init__.py",
-  "lib.rs",
-];
 
 function detectLanguage(filePath: string): string | null {
   const ext = path.extname(filePath);
   return EXTENSION_TO_LANGUAGE[ext] || null;
 }
 
-function extractImportsWithRegex(
-  content: string,
-  language: string
-): string[] {
+function extractImports(content: string, language: string): string[] {
   const patterns = IMPORT_PATTERNS[language] || [];
   const imports: string[] = [];
 
   for (const pattern of patterns) {
+    const regex = new RegExp(pattern.source, "g");
     let match;
-    const regex = new RegExp(pattern.source, pattern.flags);
     while ((match = regex.exec(content)) !== null) {
-      imports.push(match[1]);
+      // Go pattern has two capture groups
+      const importPath = match[1] || match[2];
+      if (importPath) {
+        imports.push(importPath);
+      }
     }
   }
 
@@ -78,80 +62,47 @@ function isLocalImport(importPath: string): boolean {
 
 function resolveImportToModule(
   importPath: string,
-  fromFile: string,
-  allFiles: Set<string>
+  allFilePaths: Set<string>
 ): string | null {
-  if (allFiles.has(importPath)) return importPath;
+  if (allFilePaths.has(importPath)) return importPath;
 
   const extensions = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs"];
   for (const ext of extensions) {
-    if (allFiles.has(importPath + ext)) return importPath + ext;
+    if (allFilePaths.has(importPath + ext)) return importPath + ext;
   }
 
-  for (const entryFile of ENTRY_FILES) {
+  const entryFiles = ["index.ts", "index.tsx", "index.js", "index.jsx", "main.ts", "main.go", "main.py", "main.rs", "mod.rs", "__init__.py", "lib.rs"];
+  for (const entryFile of entryFiles) {
     const indexPath = path.join(importPath, entryFile);
-    if (allFiles.has(indexPath)) return indexPath;
+    if (allFilePaths.has(indexPath)) return indexPath;
   }
 
   return null;
 }
 
-export function parseRepository(rootPath: string): DependencyMap {
+export function parseDependencies(
+  fileContents: Map<string, string>,
+  maxFiles: number = 200
+): DependencyMap {
   const modules: ModuleInfo[] = [];
   const edges: DependencyEdge[] = [];
-  const allFiles = new Set<string>();
+  const allFilePaths = new Set(fileContents.keys());
 
-  function collectFiles(dir: string, basePath: string = "") {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    const skipDirs = new Set([
-      "node_modules", ".git", "dist", "build", ".next",
-      "__pycache__", "vendor", "target",
-    ]);
+  const entries = Array.from(fileContents.entries()).slice(0, maxFiles);
 
-    for (const entry of entries) {
-      if (entry.name.startsWith(".")) continue;
-      const fullPath = path.join(dir, entry.name);
-      const relativePath = basePath ? path.join(basePath, entry.name) : entry.name;
+  for (const [filePath, content] of entries) {
+    const language = detectLanguage(filePath);
+    if (!language) continue;
 
-      if (entry.isDirectory()) {
-        if (!skipDirs.has(entry.name)) {
-          collectFiles(fullPath, relativePath);
-        }
-      } else {
-        const language = detectLanguage(entry.name);
-        if (language) {
-          allFiles.add(relativePath);
-        }
-      }
-    }
-  }
-
-  collectFiles(rootPath);
-
-  for (const filePath of allFiles) {
-    const fullPath = path.join(rootPath, filePath);
-    const language = detectLanguage(filePath)!;
-
-    let content: string;
-    try {
-      content = fs.readFileSync(fullPath, "utf-8");
-    } catch {
-      continue;
-    }
-
-    const rawImports = extractImportsWithRegex(content, language);
+    const rawImports = extractImports(content, language);
     const localImports = rawImports.filter(isLocalImport);
 
     const resolvedImports: string[] = [];
     for (const imp of localImports) {
-      const resolved = resolveImportToModule(imp, filePath, allFiles);
+      const resolved = resolveImportToModule(imp, allFilePaths);
       if (resolved) {
         resolvedImports.push(resolved);
-        edges.push({
-          from: filePath,
-          to: resolved,
-          type: "import",
-        });
+        edges.push({ from: filePath, to: resolved, type: "import" });
       }
     }
 
@@ -161,78 +112,6 @@ export function parseRepository(rootPath: string): DependencyMap {
       language,
       imports: resolvedImports,
     });
-  }
-
-  return { modules, edges };
-}
-
-export function parseEntryFiles(rootPath: string): DependencyMap {
-  const modules: ModuleInfo[] = [];
-  const edges: DependencyEdge[] = [];
-  const allFiles = new Set<string>();
-
-  function collectFiles(dir: string, basePath: string = "") {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    const skipDirs = new Set([
-      "node_modules", ".git", "dist", "build", ".next",
-      "__pycache__", "vendor", "target",
-    ]);
-
-    for (const entry of entries) {
-      if (entry.name.startsWith(".")) continue;
-      const fullPath = path.join(dir, entry.name);
-      const relativePath = basePath ? path.join(basePath, entry.name) : entry.name;
-
-      if (entry.isDirectory()) {
-        if (!skipDirs.has(entry.name)) {
-          collectFiles(fullPath, relativePath);
-        }
-      } else {
-        const language = detectLanguage(entry.name);
-        if (language) {
-          allFiles.add(relativePath);
-        }
-      }
-    }
-  }
-
-  collectFiles(rootPath);
-
-  const parsedPaths = new Set<string>();
-
-  for (const entryFile of ENTRY_FILES) {
-    if (allFiles.has(entryFile)) {
-      const fullPath = path.join(rootPath, entryFile);
-      const language = detectLanguage(entryFile)!;
-
-      let content: string;
-      try {
-        content = fs.readFileSync(fullPath, "utf-8");
-      } catch {
-        continue;
-      }
-
-      const rawImports = extractImportsWithRegex(content, language);
-      const localImports = rawImports.filter(isLocalImport);
-
-      const resolvedImports: string[] = [];
-      for (const imp of localImports) {
-        const resolved = resolveImportToModule(imp, entryFile, allFiles);
-        if (resolved) {
-          resolvedImports.push(resolved);
-          edges.push({ from: entryFile, to: resolved, type: "import" });
-        }
-      }
-
-      modules.push({
-        name: path.basename(entryFile, path.extname(entryFile)),
-        path: entryFile,
-        language,
-        imports: resolvedImports,
-      });
-
-      parsedPaths.add(entryFile);
-    }
   }
 
   return { modules, edges };
